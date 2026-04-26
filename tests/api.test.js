@@ -44,6 +44,33 @@ describe('Todo API', () => {
     expect(list.body.find(t => t.id === createdId)).toBeUndefined();
   });
 
+  // --- Security headers ---
+
+  test('GET responses include security headers and no X-Powered-By', async () => {
+    const res = await request(app).get('/api/todos');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['content-security-policy']).toBeDefined();
+    expect(res.headers['x-powered-by']).toBeUndefined();
+  });
+
+  test('POST responses include security headers', async () => {
+    const res = await request(app).post('/api/todos').send({ title: 'header check' });
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['content-security-policy']).toBeDefined();
+    expect(res.headers['x-powered-by']).toBeUndefined();
+  });
+
+  test('error responses include security headers', async () => {
+    const res = await request(app).patch('/api/todos/0');
+    expect(res.status).toBe(404);
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['content-security-policy']).toBeDefined();
+    expect(res.headers['x-powered-by']).toBeUndefined();
+  });
+
   // --- Error cases ---
 
   test('POST /api/todos without title returns 400', async () => {
