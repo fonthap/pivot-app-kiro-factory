@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo App</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; color: #222; padding: 2rem 1rem; }
+    .app { max-width: 500px; margin: 0 auto; }
+    h1 { text-align: center; margin-bottom: 1.5rem; font-size: 1.5rem; }
+    .add-form { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .add-form input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    .add-form input:focus { outline: 2px solid #4a90d9; outline-offset: -1px; }
+    .add-form button { padding: 0.5rem 1rem; background: #4a90d9; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
+    .add-form button:hover { background: #357abd; }
+    .add-form button:focus-visible { outline: 2px solid #222; outline-offset: 2px; }
+    .error { background: #fee; color: #c00; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; text-align: center; }
+    .todo-list { list-style: none; }
+    .todo-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #fff; border-radius: 4px; margin-bottom: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+    .todo-item label { flex: 1; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+    .todo-item label span { word-break: break-word; }
+    .todo-item.done label span { text-decoration: line-through; color: #999; }
+    .todo-item input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; cursor: pointer; }
+    .delete-btn { background: none; border: none; color: #c00; font-size: 1.2rem; cursor: pointer; padding: 0.25rem; line-height: 1; border-radius: 4px; }
+    .delete-btn:hover { background: #fee; }
+    .delete-btn:focus-visible { outline: 2px solid #c00; outline-offset: 2px; }
+    .empty { text-align: center; color: #888; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Todos</h1>
+    <div id="error" class="error" role="alert" hidden></div>
+    <form class="add-form" id="add-form">
+      <label for="todo-input" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">New todo</label>
+      <input id="todo-input" type="text" placeholder="What needs to be done?" required maxlength="200" autocomplete="off">
+      <button type="submit">Add</button>
+    </form>
+    <ul id="todo-list" class="todo-list" aria-label="Todo list"></ul>
+  </main>
+
+  <script>
+    const API = '/api/todos';
+    const listEl = document.getElementById('todo-list');
+    const formEl = document.getElementById('add-form');
+    const inputEl = document.getElementById('todo-input');
+    const errorEl = document.getElementById('error');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.hidden = false;
+    }
+
+    function clearError() {
+      errorEl.hidden = true;
+      errorEl.textContent = '';
+    }
+
+    function renderTodos(todos) {
+      if (!todos.length) {
+        listEl.innerHTML = '<li class="empty">No todos yet. Add one above!</li>';
+        return;
+      }
+      listEl.innerHTML = '';
+      todos.forEach(todo => {
+        const li = document.createElement('li');
+        li.className = 'todo-item' + (todo.done ? ' done' : '');
+
+        const label = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = todo.done;
+        cb.setAttribute('aria-label', 'Mark "' + todo.title + '" as ' + (todo.done ? 'not done' : 'done'));
+        cb.addEventListener('change', () => toggleTodo(todo.id));
+
+        const span = document.createElement('span');
+        span.textContent = todo.title;
+
+        label.appendChild(cb);
+        label.appendChild(span);
+
+        const del = document.createElement('button');
+        del.className = 'delete-btn';
+        del.textContent = '✕';
+        del.setAttribute('aria-label', 'Delete "' + todo.title + '"');
+        del.addEventListener('click', () => deleteTodo(todo.id));
+
+        li.appendChild(label);
+        li.appendChild(del);
+        listEl.appendChild(li);
+      });
+    }
+
+    async function loadTodos() {
+      try {
+        const res = await fetch(API);
+        if (!res.ok) throw new Error('Failed to load todos');
+        clearError();
+        renderTodos(await res.json());
+      } catch (e) {
+        showError('Could not load todos. Please try again later.');
+      }
+    }
+
+    async function addTodo(title) {
+      try {
+        const res = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to add todo');
+        }
+        clearError();
+        inputEl.value = '';
+        await loadTodos();
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    async function toggleTodo(id) {
+      try {
+        const res = await fetch(API + '/' + id, { method: 'PATCH' });
+        if (!res.ok) throw new Error('Failed to update todo');
+        clearError();
+        await loadTodos();
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    async function deleteTodo(id) {
+      try {
+        const res = await fetch(API + '/' + id, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to delete todo');
+        clearError();
+        await loadTodos();
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    formEl.addEventListener('submit', e => {
+      e.preventDefault();
+      const title = inputEl.value.trim();
+      if (title) addTodo(title);
+    });
+
+    loadTodos();
+  </script>
+</body>
+</html>
